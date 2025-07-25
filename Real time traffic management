@@ -1,0 +1,159 @@
+import tkinter as tk
+from tkinter import messagebox
+import mysql.connector
+from datetime import datetime
+
+# Database connection
+def connect_db():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="root",  # change your MySQL password here
+        database="traffic_monitoring"
+    )
+
+# Insert collected data
+def collect_data():
+    veh_type = vehicle_type_entry.get()
+    spd = speed_entry.get()
+    acc = accident_entry.get()
+    loc = location_entry.get()
+    t_density = traffic_density_entry.get()
+    weath = weather_entry.get()
+    now = datetime.now()
+
+    if not veh_type or not spd or not acc or not loc or not t_density or not weath:
+        messagebox.showerror("Error", "All fields are required")
+        return
+
+    try:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("INSERT INTO traffic_data (vehicle_type, speed, accident, location, time_collected, traffic_density, weather) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                       (veh_type, int(spd), acc == 'True', loc, now, t_density, weath))
+        db.commit()
+        db.close()
+        messagebox.showinfo("Success", "Data Collected Successfully!")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# Show all traffic data
+def show_data():
+    try:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT * FROM traffic_data")
+        records = cursor.fetchall()
+        db.close()
+
+        result = ""
+        for row in records:
+            result += f"ID:{row[0]}, Type:{row[1]}, Speed:{row[2]}, Accident:{row[3]}, Location:{row[4]}, Time:{row[5]}, Density:{row[6]}, Weather:{row[7]}\n"
+
+        show_window = tk.Toplevel(root)
+        show_window.title("Traffic Data")
+        text = tk.Text(show_window)
+        text.insert(tk.END, result)
+        text.pack()
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# Generate Report (simple count)
+def generate_report():
+    try:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT COUNT(*), AVG(speed) FROM traffic_data")
+        count, avg_speed = cursor.fetchone()
+        db.close()
+        messagebox.showinfo("Report", f"Total Records: {count}\nAverage Speed: {avg_speed:.2f} km/h")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# Create Alert (if accident true or speed very high)
+def create_alert():
+    try:
+        db = connect_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT vehicle_type, speed, accident FROM traffic_data ORDER BY id DESC LIMIT 1")
+        last = cursor.fetchone()
+        db.close()
+
+        if last:
+            veh_type, speed, accident = last
+            if accident:
+                messagebox.showwarning("Alert", f"Accident Reported involving {veh_type}")
+            elif speed > 100:
+                messagebox.showwarning("Alert", f"Overspeeding Vehicle Detected: {veh_type} at {speed} km/h")
+            else:
+                messagebox.showinfo("Safe", "No Critical Alerts")
+        else:
+            messagebox.showinfo("Info", "No data available")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# GUI setup
+root = tk.Tk()
+root.title("Real-Time Traffic Monitoring System")
+
+# Labels and Entries
+tk.Label(root, text="Vehicle Type").grid(row=0, column=0)
+vehicle_type_entry = tk.Entry(root)
+vehicle_type_entry.grid(row=0, column=1)
+
+tk.Label(root, text="Speed (km/h)").grid(row=1, column=0)
+speed_entry = tk.Entry(root)
+speed_entry.grid(row=1, column=1)
+
+tk.Label(root, text="Accident (True/False)").grid(row=2, column=0)
+accident_entry = tk.Entry(root)
+accident_entry.grid(row=2, column=1)
+
+tk.Label(root, text="Location").grid(row=3, column=0)
+location_entry = tk.Entry(root)
+location_entry.grid(row=3, column=1)
+
+tk.Label(root, text="Traffic Density (Low/Medium/High)").grid(row=4, column=0)
+traffic_density_entry = tk.Entry(root)
+traffic_density_entry.grid(row=4, column=1)
+
+tk.Label(root, text="Weather (Sunny/Rainy/Foggy)").grid(row=5, column=0)
+weather_entry = tk.Entry(root)
+weather_entry.grid(row=5, column=1)
+
+# Buttons
+tk.Button(root, text="Collect Data", command=collect_data).grid(row=6, column=0, pady=10)
+tk.Button(root, text="Show Traffic Data", command=show_data).grid(row=6, column=1)
+tk.Button(root, text="Generate Report", command=generate_report).grid(row=7, column=0)
+tk.Button(root, text="Create Alert", command=create_alert).grid(row=7, column=1)
+
+root.mainloop()-- Create Database
+CREATE DATABASE IF NOT EXISTS traffic_monitoring;
+
+-- Use the database
+USE traffic_monitoring;
+
+-- Create Table
+CREATE TABLE IF NOT EXISTS traffic_data (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    vehicle_type VARCHAR(50),
+    speed INT,
+    accident BOOLEAN,
+    location VARCHAR(100),
+    time_collected DATETIME,
+    traffic_density VARCHAR(20),
+    weather VARCHAR(20)
+);
+
+-- Queries
+SELECT * FROM traffic_data;
+
+SELECT vehicle_type, speed, location FROM traffic_data;
+
+SELECT * FROM traffic_data WHERE speed > 100;
+
+SELECT COUNT(*) FROM traffic_data;
+
+SELECT AVG(speed) FROM traffic_data;
+
+SELECT * FROM traffic_data WHERE time_collected BETWEEN '2025-04-01' AND '2025-04-30';
